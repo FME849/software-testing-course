@@ -1,32 +1,19 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
-const { CatalogPage } = require('./pages/CatalogPage');
-const { CheckoutPage } = require('./pages/CheckoutPage');
+const { test, expect } = require('./fixtures');
 
 test.describe('Checkout Module (CHK)', () => {
-  /** @type {CatalogPage} */
-  let catalog;
-  /** @type {CheckoutPage} */
-  let checkout;
 
-  test.beforeEach(async ({ page }) => {
-    // Reset cart before each test
-    await page.request.delete('http://localhost:3000/api/cart');
-    catalog = new CatalogPage(page);
-    checkout = new CheckoutPage(page);
-  });
-
-  test('TC-CHK-001: Complete Full End-to-End Checkout with Valid Shipping & Payment', async () => {
+  test('TC-CHK-001: Complete Full End-to-End Checkout with Valid Shipping & Payment', async ({ catalogPage, checkoutPage }) => {
     // Add item to cart
-    await catalog.goto();
-    await catalog.addToCart('Wireless Headphones');
+    await catalogPage.goto();
+    await catalogPage.addToCart('Wireless Headphones');
 
     // Go to checkout
-    await checkout.goto();
-    await expect(checkout.subtotal).toHaveText('$79.99');
+    await checkoutPage.goto();
+    await expect(checkoutPage.subtotal).toHaveText('$79.99');
 
     // Fill valid shipping
-    await checkout.fillShipping({
+    await checkoutPage.fillShipping({
       firstName: 'John',
       lastName: 'Doe',
       address: '123 Main Street',
@@ -37,7 +24,7 @@ test.describe('Checkout Module (CHK)', () => {
     });
 
     // Fill valid payment
-    await checkout.fillPayment({
+    await checkoutPage.fillPayment({
       cardName: 'John Doe',
       cardNumber: '4111 1111 1111 1111',
       expiry: '12/28',
@@ -45,29 +32,29 @@ test.describe('Checkout Module (CHK)', () => {
     });
 
     // Place order
-    await checkout.submitOrder();
+    await checkoutPage.submitOrder();
 
     // Verify confirmation modal and order ID
-    await expect(checkout.orderConfirmationModal).toBeVisible();
-    await expect(checkout.orderIdSpan).not.toBeEmpty();
+    await expect(checkoutPage.orderConfirmationModal).toBeVisible();
+    await expect(checkoutPage.orderIdSpan).not.toBeEmpty();
   });
 
-  test('TC-CHK-002: Checkout Form Validation for Mandatory Shipping Fields', async ({ page }) => {
-    await catalog.goto();
-    await catalog.addToCart('Wireless Headphones');
+  test('TC-CHK-002: Checkout Form Validation for Mandatory Shipping Fields', async ({ page, catalogPage, checkoutPage }) => {
+    await catalogPage.goto();
+    await catalogPage.addToCart('Wireless Headphones');
 
-    await checkout.goto();
+    await checkoutPage.goto();
 
     // Fill only first name, leave address, city, zip blank
-    await checkout.fillShipping({
+    await checkoutPage.fillShipping({
       firstName: 'John',
       lastName: 'Doe'
     });
 
-    await checkout.submitOrder();
+    await checkoutPage.submitOrder();
 
     // Browser HTML5 validation prevents submission; modal does not appear
-    await expect(checkout.orderConfirmationModal).toBeHidden();
+    await expect(checkoutPage.orderConfirmationModal).toBeHidden();
 
     // Also test direct API rejection with incomplete shipping payload
     const apiRes = await page.request.post('http://localhost:3000/api/checkout', {
@@ -80,9 +67,9 @@ test.describe('Checkout Module (CHK)', () => {
     expect(body.error).toBe('Shipping information required');
   });
 
-  test('TC-CHK-003: Prevent Checkout When Cart Is Empty', async ({ page }) => {
+  test('TC-CHK-003: Prevent Checkout When Cart Is Empty', async ({ page, checkoutPage }) => {
     // Try visiting checkout with empty cart
-    await checkout.goto();
+    await checkoutPage.goto();
 
     // Frontend script automatically redirects empty carts to /cart.html
     await expect(page).toHaveURL(/\/cart\.html/);
@@ -102,7 +89,7 @@ test.describe('Checkout Module (CHK)', () => {
     expect(body.error).toBe('Cart is empty');
   });
 
-  test('TC-CHK-004: Verify Inventory Stock Deduction After Successful Checkout', async ({ page }) => {
+  test('TC-CHK-004: Verify Inventory Stock Deduction After Successful Checkout', async ({ page, checkoutPage }) => {
     // Fetch initial stock for product 1
     const initialRes = await page.request.get('http://localhost:3000/api/products/1');
     const initialData = await initialRes.json();
@@ -114,8 +101,8 @@ test.describe('Checkout Module (CHK)', () => {
     });
 
     // Complete order via checkout
-    await checkout.goto();
-    await checkout.fillShipping({
+    await checkoutPage.goto();
+    await checkoutPage.fillShipping({
       firstName: 'Stock',
       lastName: 'Tester',
       address: '456 Warehouse Blvd',
@@ -124,14 +111,14 @@ test.describe('Checkout Module (CHK)', () => {
       zip: '48201',
       phone: '555-987-6543'
     });
-    await checkout.fillPayment({
+    await checkoutPage.fillPayment({
       cardName: 'Stock Tester',
       cardNumber: '4111 2222 3333 4444',
       expiry: '11/29',
       cvv: '999'
     });
-    await checkout.submitOrder();
-    await expect(checkout.orderConfirmationModal).toBeVisible();
+    await checkoutPage.submitOrder();
+    await expect(checkoutPage.orderConfirmationModal).toBeVisible();
 
     // Check updated stock via API
     const updatedRes = await page.request.get('http://localhost:3000/api/products/1');

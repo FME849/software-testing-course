@@ -1,17 +1,11 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
-const { CatalogPage } = require('./pages/CatalogPage');
+const { test, expect } = require('./fixtures');
 
 test.describe('Edge Cases & Security Module (EDGE)', () => {
-  /** @type {CatalogPage} */
-  let catalog;
 
-  test.beforeEach(async ({ page }) => {
-    catalog = new CatalogPage(page);
-    await catalog.goto();
-  });
+  test('TC-EDGE-001: Search Input Resilience Against Script Injection (XSS)', async ({ page, catalogPage }) => {
+    await catalogPage.goto();
 
-  test('TC-EDGE-001: Search Input Resilience Against Script Injection (XSS)', async ({ page }) => {
     // Listen for unexpected alert events
     let alertTriggered = false;
     page.on('dialog', async dialog => {
@@ -20,38 +14,40 @@ test.describe('Edge Cases & Security Module (EDGE)', () => {
     });
 
     // Attempt XSS payload in search input
-    await catalog.search('<script>alert("xss")</script>');
+    await catalogPage.search('<script>alert("xss")</script>');
 
     // Wait a brief window to confirm no dialog was invoked
     await page.waitForTimeout(500);
     expect(alertTriggered).toBe(false);
 
     // Page must remain fully interactive and render empty search results
-    await expect(catalog.productCards).toHaveCount(0);
-    await expect(catalog.noProductsMessage).toBeVisible();
-    await expect(catalog.logo).toBeVisible();
+    await expect(catalogPage.productCards).toHaveCount(0);
+    await expect(catalogPage.noProductsMessage).toBeVisible();
+    await expect(catalogPage.logo).toBeVisible();
   });
 
-  test('TC-EDGE-002: Search Input with Whitespace Only', async () => {
+  test('TC-EDGE-002: Search Input with Whitespace Only', async ({ catalogPage }) => {
+    await catalogPage.goto();
+
     // Fill search with whitespace
-    await catalog.search('    ');
+    await catalogPage.search('    ');
 
     // Should handle whitespace gracefully without crashing
-    const cardCount = await catalog.productCards.count();
-    const emptyVisible = await catalog.noProductsMessage.isVisible();
+    const cardCount = await catalogPage.productCards.count();
+    const emptyVisible = await catalogPage.noProductsMessage.isVisible();
     expect(cardCount > 0 || emptyVisible).toBe(true);
-    await expect(catalog.logo).toBeVisible();
+    await expect(catalogPage.logo).toBeVisible();
   });
 
-  test('TC-EDGE-003: Responsive Layout and Mobile Navigation on Small Screens', async ({ page }) => {
+  test('TC-EDGE-003: Responsive Layout and Mobile Navigation on Small Screens', async ({ page, catalogPage }) => {
     // Emulate small smartphone viewport
     await page.setViewportSize({ width: 375, height: 667 });
-    await catalog.goto();
+    await catalogPage.goto();
 
     // Verify key UI elements reflow cleanly without overflow
-    await expect(catalog.logo).toBeVisible();
-    await expect(catalog.cartLink).toBeVisible();
-    await expect(catalog.productCards).toHaveCount(6);
+    await expect(catalogPage.logo).toBeVisible();
+    await expect(catalogPage.cartLink).toBeVisible();
+    await expect(catalogPage.productCards).toHaveCount(6);
 
     // Verify no horizontal scrolling exists on document
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -59,7 +55,7 @@ test.describe('Edge Cases & Security Module (EDGE)', () => {
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 
     // Add item on mobile viewport
-    await catalog.addToCart();
-    await expect(catalog.toast).toBeVisible();
+    await catalogPage.addToCart();
+    await expect(catalogPage.toast).toBeVisible();
   });
 });
